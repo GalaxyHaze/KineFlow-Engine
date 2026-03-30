@@ -1,0 +1,18 @@
+[project]
+name    = "my-game"
+version = "0.1.0"
+
+[runtime]
+fps_cap    = 60
+vsync      = true
+fixed_step = false   # true → onUpdate receives a fixed dt
+
+[window]
+title  = "My Game"
+width  = 1280
+height = 720
+
+[features]
+audio      = true
+physics    = false
+networking = false
