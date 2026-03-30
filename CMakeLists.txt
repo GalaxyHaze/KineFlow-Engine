@@ -8,5 +8,12 @@ project(MeuProjeto LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Adiciona o executável e associa-o aos ficheiros fonte
-add_executable(meu_executavel main.cpp)
+# Procura todos os ficheiros .cpp na pasta kineflow
+file(GLOB KINEFLOW_SOURCES "kineflow/*.hpp")
+
+# Adiciona o executável com o main e os fontes da pasta
+add_executable(meu_executavel main.cpp ${KINEFLOW_SOURCES})
+
+# Torna a pasta RAIZ do projeto visível para os includes
+# Assim, #include <kineflow/scene.hpp> funcionará
+target_include_directories(meu_executavel PRIVATE ${CMAKE_SOURCE_DIR})
