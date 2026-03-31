@@ -2,17 +2,48 @@
 name    = "my-game"
 version = "0.1.0"
 
+[build]
+mode = "debug"          # "debug" | "release" | "profile"
+
+[debug]
+fps       = 60
+inspector = true
+pool      = 128         # MB — arena allocator
+
+[release]
+fps       = 120
+pool      = 64
+
 [runtime]
-fps_cap    = 60
-vsync      = true
-fixed_step = false   # true → onUpdate receives a fixed dt
+fixed = false           # true → dt constante no work()
 
 [window]
-title  = "My Game"
+title  = "my-game"
 width  = 1280
 height = 720
+mode   = "windowed"     # "windowed" | "borderless" | "fullscreen"
+
+[renderer]
+backend = "opengl"      # "opengl" | "vulkan" | "metal" | "dx11"
+
+[threads]
+count       = 0         # 0 = auto (hardware_concurrency)
+pool        = true      # activa o thread pool
+pool-grow   = true      # pool pode crescer dinamicamente
 
 [features]
-audio      = true
-physics    = false
-networking = false
+audio     = false
+physics   = false
+ecs       = false
+network   = false
+json      = false
+xml       = false
+serialize = false
+plugins   = false
+
+[plugins]
+allow-native = true     # permite .dll/.so assinados
+allow-vm     = true     # permite bytecode Kalidous
+strict-sign  = true     # rejeita plugins sem assinatura válida
+path         = "plugins/"
+sandbox      = true
