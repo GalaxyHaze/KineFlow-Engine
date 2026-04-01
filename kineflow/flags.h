@@ -137,10 +137,15 @@ constexpr int kRenderer = KINE_RENDERER;
 #   define KINE_THREAD_GROW 0
 #endif
 
+/*#ifndef KINE_THREAD_MEMORY
+#define KINE_THREAD_MEMORY 512
+#endif*/
+
 constexpr size_t kThreadCount    = KINE_THREAD_COUNT;
 constexpr size_t kMaxAsyncTasks  = KINE_MAX_ASYNC_TASKS;
 constexpr size_t kMaxDaemonTasks = KINE_MAX_DAEMON_TASKS;
 constexpr bool   kThreadGrow     = KINE_THREAD_GROW;
+//constexpr size_t kThreadMemory   = KINE_THREAD_MEMORY;
 
 #undef KINE_THREAD_COUNT
 #undef KINE_MAX_ASYNC_TASKS

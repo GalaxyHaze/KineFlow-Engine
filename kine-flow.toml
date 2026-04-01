@@ -28,6 +28,7 @@ backend = "opengl"      # "opengl" | "vulkan" | "metal" | "dx11"
 
 [threads]
 count       = 0         # 0 = auto (hardware_concurrency)
+memory      = 512       #512kb para cada thread inicialmente
 pool        = true      # activa o thread pool
 pool-grow   = true      # pool pode crescer dinamicamente
 
