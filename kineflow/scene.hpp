@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
-#include <new>
+#include "arena.hpp"
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -21,42 +21,13 @@ namespace kine {
 
     template<class Sig> using fn = Sig*;
     class Scene;
+    class Thread;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // § 2. ARENA
 // ═══════════════════════════════════════════════════════════════════════════════
 
-    class Arena {
-        std::byte*  buffer_   = nullptr;
-        std::size_t capacity_ = 0;
-        std::size_t offset_   = 0;
-
-    public:
-        explicit Arena(std::size_t size);
-        ~Arena();
-
-        Arena(const Arena&)            = delete;
-        Arena& operator=(const Arena&) = delete;
-        Arena(Arena&&)                 = delete;
-        Arena& operator=(Arena&&)      = delete;
-
-        [[nodiscard]] void* allocate(std::size_t size,
-                                     std::size_t alignment = alignof(std::max_align_t));
-
-        template<class T, class... Args>
-        [[nodiscard]] T* create(Args&&... args)
-        {
-            void* mem = allocate(sizeof(T), alignof(T));
-            if (!mem) return nullptr;
-            return new (mem) T(std::forward<Args>(args)...);
-        }
-
-        void reset() noexcept;
-
-        [[nodiscard]] std::size_t used()     const noexcept;
-        [[nodiscard]] std::size_t free()     const noexcept;
-        [[nodiscard]] std::size_t capacity() const noexcept;
-    };
+    
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // § 3. VTABLE
@@ -65,6 +36,7 @@ namespace kine {
     struct VTable {
         fn<Scene*(void*, void*)> work    = nullptr;  // despacho de work(args...)
         fn<void(void*)>          drop    = nullptr;  // lógica do utilizador
+        //You should not touch  on destroy btw, put your logic on drop
         fn<void(void*)>          destroy = nullptr;  // ~Self()
 
         [[nodiscard]] bool valid() const noexcept { return work && drop && destroy; }
@@ -89,6 +61,7 @@ namespace kine {
 // ═══════════════════════════════════════════════════════════════════════════════
 
     class Scene {
+    Thread* pool = nullptr;
     public:
         Scene()  = default;
         ~Scene();
@@ -113,7 +86,7 @@ namespace kine {
 
         // Allocator exposto ao utilizador — único modo de criar objectos
         template<class T, class... Args>
-        [[nodiscard]] T* alloc(Args&&... args)
+        [[nodiscard]] Handle<T> create(Args&&... args)
         {
             assert(data_ && data_->sceneArena && "[Kine] alloc called before enter()");
             return data_->sceneArena->create<T>(std::forward<Args>(args)...);
@@ -144,11 +117,11 @@ namespace kine {
             VTable  vtable;
             Slice   slice;
             Pack    pack;
-            Arena*  sceneArena = nullptr;
-            Arena*  taskArena  = nullptr;
+            Arena* sceneArena = new Arena(kSceneArenaSize);
+            Arena* taskArena  = new Arena(kTaskArenaSize);
         };
 
-        Data* data_ = nullptr;
+        Data* data_ = new Data{};
 
         // ── HELPERS INTERNOS (template) ──────────────────────────────────────
 
@@ -175,10 +148,15 @@ namespace kine {
     {
         static_assert(std::is_default_constructible_v<Self>,
                       "Scene subclass must be default-constructible.");
+        if(!data_){
+            std::cerr << "-Fatal error: could not initialize internal member 'data'\n";
+            std::exit(-1);
+        }
 
-        data_             = new Data{};
-        data_->sceneArena = new Arena(kSceneArenaSize);
-        data_->taskArena  = new Arena(kTaskArenaSize);
+        if(!data_->sceneArena || !data_->taskArena){
+            std::cerr << "-Fatal error: could not initialize internal Arena\n";
+            std::exit(-1);
+        }
 
         // Objecto derivado vive dentro da scene arena
         Self* instance = data_->taskArena->create<Self>();
@@ -203,7 +181,6 @@ namespace kine {
         } else {
             data_->vtable.drop = [](void*) {};
         }
-
         assert(data_->vtable.valid());
     }
 
@@ -256,9 +233,10 @@ namespace kine {
     Scene* Scene::enter(Args&&... args)
     requires std::is_default_constructible_v<Self> && HasWork<Self, Args...>
     {
-        if (!data_) init<Self, Args...>();
+            init<Self, Args...>();
+
         packArgs(std::forward<Args>(args)...);
-        return this;
+        return (Scene*)data_->slice.self;
     }
 
 } // namespace kine

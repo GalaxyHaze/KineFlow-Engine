@@ -9,8 +9,8 @@ struct Main: public kine::Scene{
     }
 
     Scene* work(int a){
-        std::cout << "-Another Scene!\n";
-        return nullptr;
+        std::cout << "-Another Scene!\nNumber: " << a << "\n";
+        return enter<Main>(++a);
         //return nullptr;
     }
 

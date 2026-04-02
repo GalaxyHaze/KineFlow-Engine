@@ -1,16 +1,21 @@
-#include <print>
+//#include <iostream>
 #include <kineflow/scene.hpp>
 #include "scenes/main.hpp"
+
+#include <bits/atomic_base.h>
 
 using namespace kine;
 
 int main() {
     
     Scene entry{};
-    auto i = entry.enter<Main>(0);
+    auto i = entry.enter<Main>(5);
     while(i){
-        i = entry.execute();
-        std::cout << "-Entry add: " << &entry;
-        std::cout << "-\nScene add: " << i << '\n';
+        i = i->execute();
+        //sleep(1);
+        //i = entry.enter<Main>();
+        if (!i)
+            std::cout << "-Null\n";
+            //break;
     }
 }
