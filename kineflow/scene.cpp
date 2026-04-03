@@ -1,48 +1,33 @@
-// scene.cpp
 #include "scene.hpp"
 
 namespace kine {
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ARENA
-// ═══════════════════════════════════════════════════════════════════════════════
-
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // SCENE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-    // Ponto central de destruição — todos os caminhos passam aqui
     void Scene::teardown(const bool callDrop)
     {
         if (!data_) return;
 
-        // 1. Lógica do utilizador (save, log) — apenas se pedido e se ainda vivo
+        // 1. Logica do utilizador (save, log)
         if (callDrop && data_->slice.self && data_->vtable.drop)
             data_->vtable.drop(data_->slice.self);
 
-        // 2. Destruir o pack de argumentos
-        if (data_->pack.ptr && data_->pack.drop) {
-            data_->pack.drop(data_->pack.ptr);
-            //data_->pack.ptr  = nullptr;
-            //data_->pack.drop = nullptr;
-        }
+        // NOTA: pack, destroy e slice.self NAO sao tocados aqui.
+        // Todas as cenas na cadeia partilham o mesmo Data*.
+        // execute() verifica slice.self e pack.ptr como guard —
+        // anular qualquer um interrompe a cadeia.
+        // A arena e bump-allocator: reset() reclama sem invalidar
+        // a memoria, logo dangling pointers nao sao um problema.
 
-        // 3. Chamar ~Self() — FIX: garantido mesmo que execute() nunca tenha sido chamado
-        /*if (data_->slice.self && data_->vtable.destroy) {
-            //data_->vtable.destroy(data_->slice.self);
-            data_->slice.self = nullptr;  // guarda contra double-destroy
-        }*/
-
-        // 4. Resetar arenas (memória reclamada, mas buffers mantêm-se para reutilização)
+        // 2. Resetar arenas (memoria reclamada, buffers mantem-se para reutilizacao)
         if (data_->taskArena)  data_->taskArena->reset();
         if (data_->sceneArena) data_->sceneArena->reset();
     }
 
     Scene::~Scene()
     {
-        // FIX: teardown garante ~Self() mesmo que execute() nunca tenha sido chamado
         teardown(true);
 
         if (data_) {
@@ -53,12 +38,12 @@ namespace kine {
         }
     }
 
-    Scene* Scene::execute(){
+    Scene* Scene::execute()
+    {
+        if (!data_ || !data_->vtable.work)                return nullptr;
+        if (!data_->slice.self || !data_->pack.ptr)       return nullptr;
 
-        if (!data_ || !data_->vtable.work)    return nullptr;
-        if (!data_->slice.self || !data_->pack.ptr) return nullptr;
-
-        // 1. Executar work — obter próxima scene
+        // 1. Executar work — obter proxima scene
         Scene* next = data_->vtable.work(data_->slice.self, data_->pack.ptr);
 
         teardown(true);
@@ -68,7 +53,6 @@ namespace kine {
 
     void Scene::shutdown()
     {
-        // Teardown forçado — engine a terminar ou quit abrupto
         teardown(true);
     }
 

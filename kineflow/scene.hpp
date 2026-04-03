@@ -1,4 +1,3 @@
-// scene.hpp
 #pragma once
 
 #include <cassert>
@@ -24,26 +23,19 @@ namespace kine {
     class Thread;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// § 2. ARENA
-// ═══════════════════════════════════════════════════════════════════════════════
-
-    
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// § 3. VTABLE
+// § 2. VTABLE
 // ═══════════════════════════════════════════════════════════════════════════════
 
     struct VTable {
         fn<Scene*(void*, void*)> work    = nullptr;  // despacho de work(args...)
-        fn<void(void*)>          drop    = nullptr;  // lógica do utilizador
-        //You should not touch  on destroy btw, put your logic on drop
+        fn<void(void*)>          drop    = nullptr;  // logica do utilizador
         fn<void(void*)>          destroy = nullptr;  // ~Self()
 
         [[nodiscard]] bool valid() const noexcept { return work && drop && destroy; }
     };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// § 4. CONCEPTS
+// § 3. CONCEPTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
     template<class T, class... Args>
@@ -56,12 +48,16 @@ namespace kine {
         { t.drop() } -> std::same_as<void>;
     };
 
+    template<class T>
+    concept SceneSubclass = std::is_base_of_v<Scene, T>;
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// § 5. SCENE
+// § 4. SCENE
 // ═══════════════════════════════════════════════════════════════════════════════
 
     class Scene {
-    Thread* pool = nullptr;
+        Thread* pool = nullptr;
+
     public:
         Scene()  = default;
         ~Scene();
@@ -71,20 +67,22 @@ namespace kine {
         Scene(Scene&&)                 = delete;
         Scene& operator=(Scene&&)      = delete;
 
-        // ── API PÚBLICA ──────────────────────────────────────────────────────
+        // ── API PUBLICA ──────────────────────────────────────────────────────
 
         // Prepara a scene com args — retorna this para chaining
         template<class Self, class... Args>
         [[nodiscard]] Scene* enter(Args&&... args)
-        requires std::is_default_constructible_v<Self> && HasWork<Self, Args...>;
+        requires SceneSubclass<Self>
+              && std::is_default_constructible_v<Self>
+              && HasWork<Self, Args...>;
 
-        // Executa um tick: work → drop → destroy → reset arenas → retorna próxima
+        // Executa um tick: work -> drop -> destroy -> reset arenas -> retorna proxima
         [[nodiscard]] Scene* execute();
 
-        // Teardown forçado pelo engine (ex: quit abrupto)
+        // Teardown forcado pelo engine (ex: quit abrupto)
         void shutdown();
 
-        // Allocator exposto ao utilizador — único modo de criar objectos
+        // Allocator exposto ao utilizador — unico modo de criar objectos
         template<class T, class... Args>
         [[nodiscard]] Handle<T> create(Args&&... args)
         {
@@ -92,7 +90,7 @@ namespace kine {
             return data_->sceneArena->create<T>(std::forward<Args>(args)...);
         }
 
-        // ── PRIMITIVAS DE CONCORRÊNCIA ───────────────────────────────────────
+        // ── PRIMITIVAS DE CONCORRENCIA ───────────────────────────────────────
 
         template<class... Args> void  append(Args&&...)   { /* TODO */ }
         template<class... Args> void  async(Args&&...)    { /* TODO */ }
@@ -109,7 +107,7 @@ namespace kine {
         };
 
         struct Slice {
-            void*       self = nullptr;  // objecto derivado na scene arena
+            void*       self = nullptr;  // objecto derivado na task arena
             std::size_t size = 0;
         };
 
@@ -135,34 +133,37 @@ namespace kine {
         void packArgs(Args&&... args);
 
         // Centraliza destroy + reset — chamado por execute(), shutdown(), ~Scene()
-        // callDrop: false quando já foi chamado (evita double-drop)
+        // callDrop: false quando ja foi chamado (evita double-drop)
         void teardown(bool callDrop);
     };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// § 6. TEMPLATE IMPLEMENTATIONS
+// § 5. TEMPLATE IMPLEMENTATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
     template<class Self, class... Args>
     void Scene::init()
     {
+        static_assert(std::is_base_of_v<Scene, Self>,
+                      "Scene subclass must derive from Scene.");
         static_assert(std::is_default_constructible_v<Self>,
                       "Scene subclass must be default-constructible.");
-        if(!data_){
-            std::cerr << "-Fatal error: could not initialize internal member 'data'\n";
-            std::exit(-1);
+
+        if (!data_) {
+            std::cerr << "[Kine] Fatal: could not initialize internal 'data'.\n";
+            std::exit(EXIT_FAILURE);
         }
 
-        if(!data_->sceneArena || !data_->taskArena){
-            std::cerr << "-Fatal error: could not initialize internal Arena\n";
-            std::exit(-1);
+        if (!data_->sceneArena || !data_->taskArena) {
+            std::cerr << "[Kine] Fatal: could not initialize internal Arena.\n";
+            std::exit(EXIT_FAILURE);
         }
 
-        // Objecto derivado vive dentro da scene arena
+        // Objecto derivado vive dentro da task arena
         Self* instance = data_->taskArena->create<Self>();
-        assert(instance && "[Kine] Scene arena failed to allocate derived object.");
+        assert(instance && "[Kine] Task arena failed to allocate derived object.");
 
-        // Derivado partilha o mesmo Data — assim alloc() funciona dentro de work()
+        // Derivado partilha o mesmo Data — assim create() funciona dentro de work()
         instance->data_   = data_;
         data_->slice.self = instance;
         data_->slice.size = sizeof(Self);
@@ -181,6 +182,7 @@ namespace kine {
         } else {
             data_->vtable.drop = [](void*) {};
         }
+
         assert(data_->vtable.valid());
     }
 
@@ -207,7 +209,7 @@ namespace kine {
     {
         assert(data_ && data_->taskArena);
 
-        // FIX: destruir pack anterior se packArgs for chamado mais de uma vez
+        // Destruir pack anterior se packArgs for chamado mais de uma vez
         if (data_->pack.ptr && data_->pack.drop) {
             data_->pack.drop(data_->pack.ptr);
             data_->pack.ptr  = nullptr;
@@ -231,12 +233,13 @@ namespace kine {
 
     template<class Self, class... Args>
     Scene* Scene::enter(Args&&... args)
-    requires std::is_default_constructible_v<Self> && HasWork<Self, Args...>
+    requires SceneSubclass<Self>
+          && std::is_default_constructible_v<Self>
+          && HasWork<Self, Args...>
     {
-            init<Self, Args...>();
-
+        init<Self, Args...>();
         packArgs(std::forward<Args>(args)...);
-        return (Scene*)data_->slice.self;
+        return static_cast<Scene*>(data_->slice.self);
     }
 
 } // namespace kine

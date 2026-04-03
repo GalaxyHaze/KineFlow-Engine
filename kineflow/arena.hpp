@@ -35,7 +35,7 @@ struct ArenaMarker {       // Index in access[]
     std::size_t   offset;      // Offset inside that block
     std::uint32_t generation;  // Generation at time of save
     std::uint16_t scope;       // Scope depth
-    std::uint8_t   block;
+    std::int8_t   block;
 };
 
 template<class T>
